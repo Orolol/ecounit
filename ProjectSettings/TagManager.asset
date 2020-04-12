@@ -7,6 +7,7 @@ TagManager:
   - CityCube
   - UITT
   - MainUI
+  - CityDetail
   layers:
   - Default
   - TransparentFX

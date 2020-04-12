@@ -24,7 +24,7 @@ public class CityMouse : MonoBehaviour
 
     public CityMouse(string a)
     {
-        Debug.Log("OK CONSTRUCTOR " + a);
+        // Debug.Log("OK CONSTRUCTOR " + a);
     }
 
     void Start()
@@ -32,7 +32,7 @@ public class CityMouse : MonoBehaviour
         Physics.queriesHitTriggers = true;
         Cursor.visible = true;
 
-        Debug.Log("OK START MOUSE " + gameObject.name);
+        // Debug.Log("OK START MOUSE " + gameObject.name);
 
         //Fetch the mesh renderer component from the GameObject
         m_Renderer = GetComponent<MeshRenderer>();
@@ -45,15 +45,15 @@ public class CityMouse : MonoBehaviour
         {
             GameObject UITT = GameObject.FindGameObjectWithTag("UITT");
             cityText = UITT.GetComponent<Text>();
-            cityText.text = city.name + "(" + city.localPops.Count + " pops)" + " | Wheat :" + city.stock["Wheat"] + " | Cow : " + city.stock["Cow"];
-            isOver = true;
 
-        }
-        else
-        {
             isOver = true;
-            cityText.text = city.name + "(" + city.localPops.Count + " pops)" + " | Wheat :" + city.stock["Wheat"] + " | Cow : " + city.stock["Cow"];
         }
+        cityText.text = city.name + "(" + city.localPops.Count + " pops)" + " | ";
+        // foreach (KeyValuePair<string, int> entry in city.stock)
+        // {
+        //     cityText.text += entry.Key + " : " + entry.Value + " | ";
+        // }
+
     }
     void OnMouseExit()
     {

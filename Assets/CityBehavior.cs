@@ -1,62 +1,144 @@
-﻿using System.Collections;
+﻿using System.Linq;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 public class City : MonoBehaviour
 {
     public string name;
-    private int money;
+    public float money;
     public int x;
     public int z;
     public int prosperity;
+    public int foodStock = 100;
     private int popGrowth = 0;
-    public Dictionary<string, int> stock;
+    public List<TradeItem> stock;
     public List<Pop> localPops;
+    public List<Pop> leavingPops = new List<Pop>();
     public List<Industry> industries;
     private float timeStart;
     static float tickLength = 0.1f;
     public int tier;
+    public Vector3 vector;
+    public Dictionary<City, NavMeshPath> pathToCities;
+    public Dictionary<City, float> distanceToCities;
+    protected static string[] resources = { "IronOre", "Stone", "CopperOre", "GoldOre", "Forest", "fertileLand" };
+    public static System.Random rand = new System.Random();
+    public List<string> resourcesAvailable = new List<string>();
+    public List<MilitaryComplex> militaryBuildings = new List<MilitaryComplex>();
+    public int nbMilitia = 10;
+    private int economyStack = 10;
+    private int economySpeed = 10;
     public void initCity(string n, int xpos = 0, int zpos = 0, int tierd = 1)
     {
         tier = tierd;
         x = xpos;
         z = zpos;
         name = n;
+        foodStock = 100 * tier;
         money = 0;
         prosperity = 100;
         industries = new List<Industry>();
         localPops = new List<Pop>();
-        stock = new Dictionary<string, int>();
-        stock.Add("Wheat", 0);
-        stock.Add("Cow", 0);
-        stock.Add("Iron", 0);
+        stock = new List<TradeItem>();
+        stock.Add(new TradeItem("Wheat", 50));
+        stock.Add(new TradeItem("Cow", 10));
+        stock.Add(new TradeItem("Sheep", 0));
+        stock.Add(new TradeItem("Fish", 0));
+        stock.Add(new TradeItem("Iron", 0));
+        stock.Add(new TradeItem("Stone", 0));
+        stock.Add(new TradeItem("Gold", 0));
+        stock.Add(new TradeItem("Copper", 0));
+        stock.Add(new TradeItem("Wood", 0));
+        stock.Add(new TradeItem("Sword", 30));
+        stock.Add(new TradeItem("Bow", 0));
+        stock.Add(new TradeItem("Arrow", 0));
         if (tier >= 1)
         {
-            industries.Add(new Field("field1"));
-            industries.Add(new Pasture("pasturo"));
-            localPops.Add(new Worker("Jean", 1));
-            localPops.Add(new Worker("Paul", 1));
-            localPops.Add(new Worker("Deux", 1));
+            industries.Add(new Field());
+            localPops.AddRange(WorldGenerator.generatePopEnMasse(1, this, 5));
+            localPops.Add(WorldGenerator.generatePop(5, this));
+            resourcesAvailable.Add(resources[rand.Next(resources.Length)]);
         }
         if (tier >= 2)
         {
-            industries.Add(new Field("field1"));
-            industries.Add(new Pasture("pasturo"));
-            localPops.Add(new Worker("Jean", 1));
-            localPops.Add(new Worker("Paul", 1));
-            localPops.Add(new Worker("Deux", 1));
+            industries.Add(new Field());
+            industries.Add(new Pasture());
+            localPops.AddRange(WorldGenerator.generatePopEnMasse(1, this, 7));
+            localPops.AddRange(WorldGenerator.generatePopEnMasse(2, this, 2));
+            localPops.Add(WorldGenerator.generatePop(5, this));
+            resourcesAvailable.Add(resources[rand.Next(resources.Length)]);
+            militaryBuildings.Add(new Barrack(this));
         }
         if (tier >= 3)
         {
-            industries.Add(new Field("field1"));
-            industries.Add(new Pasture("pasturo"));
-            localPops.Add(new Worker("Jean", 1));
-            localPops.Add(new Worker("Paul", 1));
-            localPops.Add(new Worker("Deux", 1));
+            industries.Add(new Field());
+            industries.Add(new Pasture());
+            localPops.AddRange(WorldGenerator.generatePopEnMasse(1, this, 15));
+            localPops.AddRange(WorldGenerator.generatePopEnMasse(2, this, 2));
+            localPops.Add(WorldGenerator.generatePop(5, this));
+            resourcesAvailable.Add(resources[rand.Next(resources.Length)]);
         }
+        economySpeed = rand.Next(10, 15);
+
 
     }
 
+    public float getBuyPrice(TradeItem titem, int quant)
+    {
+        if (quant <= titem.quantity)
+        {
+            return titem.currentBuyPrice * quant * 1.05f;
+        }
+        else
+        {
+            return titem.currentBuyPrice * titem.quantity * 1.05f;
+        }
+    }
+    public StockItem buyItems(TradeItem titem, float m, int quant)
+    {
+        int q = titem.takeStock(quant);
+        if (q > 0)
+        {
+            money += m * 0.05f;
+
+        }
+        return new StockItem(new Item(titem.getName()), q);
+    }
+    public float getSellPrice(ItemContainer sitem, int quant)
+    {
+        TradeItem titem = retrieveFromStock(sitem.getName());
+        if (titem != null)
+        {
+            if (quant <= titem.quantity)
+            {
+                return titem.currentSellPrice * quant * 0.95f;
+            }
+            else
+            {
+                return titem.currentSellPrice * titem.quantity * 0.95f;
+            }
+        }
+        else
+        {
+            return 0.0f;
+        }
+    }
+    public float SellItems(ItemContainer sitem, int quant)
+    {
+        TradeItem titem = retrieveFromStock(sitem.getName());
+        if (titem != null)
+        {
+            money += titem.currentBuyPrice * sitem.quantity * 0.05f;
+            titem.addStock(sitem.quantity);
+            return titem.currentSellPrice * quant * 0.95f;
+        }
+        else
+        {
+            return 0.0f;
+        }
+    }
     void Update()
     {
         timeStart += Time.deltaTime;
@@ -66,245 +148,167 @@ public class City : MonoBehaviour
             timeStart = 0.0f;
         }
     }
-
-    private int foodStock()
+    public TradeItem retrieveFromStock(string name)
     {
-        int food = 0;
-        foreach (KeyValuePair<string, int> entry in stock)
+        return stock.Find(x => x.getName() == name);
+    }
+    private int consumeFood(int n)
+    {
+        // print("Try to consume " + n);
+        int consumed = 0;
+
+        foreach (TradeItem item in stock)
         {
-            switch (entry.Key)
+            while (item.getFoodValue() > 0 && consumed < n && item.quantity > 0)
             {
-                case "Wheat":
-                    food += entry.Value;
-                    break;
-                case "Cow":
-                    food += entry.Value * 3;
-                    break;
+                consumed += item.takeStock(1) * item.getFoodValue();
             }
         }
-
-        return food;
+        // print("Got " + consumed + " from resources");
+        if (consumed < n && foodStock >= n - consumed)
+        {
+            foodStock -= (n - consumed);
+            consumed = n;
+            // print("enougth stock. Left :  " + foodStock);
+        }
+        else if (consumed < n)
+        {
+            consumed += foodStock;
+            foodStock = 0;
+            // print("took all)");
+        }
+        return consumed;
     }
-
     public void ticker()
     {
-
-        foreach (Pop p in localPops)
+        if (localPops != null && localPops.Count > 0)
         {
-            if (p.workplace == null)
+            foreach (Pop p in localPops)
             {
-                industries = p.lookingForJob(industries);
-            }
-        }
-
-        foreach (Industry ind in industries)
-        {
-            stock = ind.fillStock(stock);
-            Dictionary<string, int> prod = ind.process();
-            if (prod != null)
-            {
-                foreach (KeyValuePair<string, int> entry in prod)
+                if (p != null && p.workplace == null)
                 {
-                    stock[entry.Key] += entry.Value;
+                    industries = p.lookingForJob(industries);
+                }
+                if (p != null && p.type == 5)
+                {
+                    ((Merchant)p).analyzeMarket(stock);
                 }
             }
-
+        }
+        if (industries.Any())
+        {
+            foreach (Industry ind in industries)
+            {
+                // Debug.Log("FILL " + ind);
+                stock = ind.fillStock(stock);
+                List<StockItem> prod = ind.process();
+                if (prod != null)
+                {
+                    foreach (StockItem item in prod)
+                    {
+                        TradeItem titem = stock.Find(x => x.getName() == item.getName());
+                        titem.addStock(item.quantity);
+                    }
+                }
+            }
         }
 
-        if (foodStock() >= 10 && prosperity >= 100)
+        if (foodStock >= 10 && prosperity >= 100)
         {
             popGrowth++;
             if (popGrowth >= 100)
             {
-                localPops.Add(new Worker("Péon", 1));
+                localPops.Add(WorldGenerator.generatePop(1, this));
                 popGrowth -= 100;
-                Debug.Log("New Péon spawn");
+                // Debug.Log("New Péon spawn");
             }
         }
-
-    }
-
-}
-
-public abstract class Pop
-{
-    public string name;
-    public int type;
-
-    public Industry workplace = null;
-
-    public void setWorkplace(Industry i)
-    {
-        workplace = i;
-    }
-
-    public List<Industry> lookingForJob(List<Industry> inds)
-    {
-        inds.Sort(new IndustrySortPerJob());
-        foreach (Industry ind in inds)
+        economyStack++;
+        if (economyStack >= economySpeed)
         {
-            // Debug.Log (this.name + " looking at " + ind.name + " //  available : " + ind.availableJobs);
-            if (ind.availableJobs > 0 && ind.neededJob == this.type)
-            {
-                this.workplace = ind;
-                ind.addPop(this);
-                // Debug.Log (this.name + " found a job at " + ind.name);
-                break;
-            }
+            economyStack = 0;
+            EconomicTurn();
         }
-        return inds;
-    }
-}
 
-
-
-public class Worker : Pop
-{
-
-    private float work;
-    public Worker(string n, int t)
-    {
-        name = n;
-        type = t;
-        work = 0;
-    }
-    public float working()
-    {
-        work += 1.0f;
-        if (work >= 1)
+        if (foodStock < 100 * tier)
         {
-            work = 0;
-            return 1.0f;
-        }
-        else { return 0; }
-    }
-
-}
-
-public abstract class Industry
-{
-    public List<Pop> workers;
-    protected float work;
-    public string name;
-    public int availableJobs;
-    public int neededJob;
-    protected int workNeeded;
-    public Dictionary<string, int> production;
-    public Dictionary<string, int> components;
-    public Dictionary<string, int> stockItem;
-    public Dictionary<string, int> fillStock(Dictionary<string, int> p)
-    {
-        if (components != null)
-        {
-            foreach (KeyValuePair<string, int> entry in components)
+            foreach (TradeItem item in stock)
             {
-                if (p[entry.Key] >= entry.Value)
+                while (item.getFoodValue() > 0 && foodStock < 100 * tier && item.quantity > 0)
                 {
-                    stockItem[entry.Key] += entry.Value;
-                    p[entry.Key] -= entry.Value;
-                    // Debug.Log ("Stock filled at " + this.name);
+                    foodStock += item.takeStock(1) * item.getFoodValue();
                 }
             }
         }
-        return p;
-    }
-    public bool addPop(Pop p)
-    {
-        if (p.type == neededJob && availableJobs > 0)
+
+        foreach (Pop l in leavingPops)
         {
-            workers.Add((Worker)p);
-            availableJobs -= 1;
-            return true;
+            localPops.Remove(l);
         }
-        else
-        {
-            Debug.Log("Wasnt a worker or wp full");
-            return false;
-        }
+        leavingPops = new List<Pop>();
+
+
 
     }
-    public Dictionary<string, int> process()
+    private void EconomicTurn()
     {
-        // Debug.Log("Let'sproduce at " + this.name);
-        foreach (Worker w in workers)
+        // if (nbMilitia > 0)
+        // {
+        //     nbMilitia -= 1;
+        // }
+        if (resourcesAvailable.Any())
         {
-            // Debug.Log("Go to work :" + w.name);
-            work += w.working();
-        }
-        if (work >= workNeeded)
-        {
-            if (components != null)
+            // var res = resourcesAvailable[resourcesAvailable.Count - 1];
+            foreach (string res in resourcesAvailable)
             {
-                foreach (KeyValuePair<string, int> entry in components)
+                Industry ind = Industry.generateIndustryForResource(res);
+                if (ind != null)
                 {
-                    if (stockItem.ContainsKey(entry.Key) && stockItem[entry.Key] >= entry.Value)
+                    // resourcesAvailable.RemoveAt(resourcesAvailable.Count - 1);
+                    industries.Add(ind);
+                }
+
+            }
+            resourcesAvailable = new List<string>();
+        }
+        consumeFood(localPops.Count);
+        foreach (Pop p in localPops)
+        {
+            if (p.type == 2 && p.workplace == null)
+            {
+                industries = p.lookingForJob(industries);
+                if (p.workplace == null)
+                {
+                    foreach (TradeItem item in stock)
                     {
-                        stockItem[entry.Key] -= entry.Value;
-                        work -= workNeeded;
-                        // Debug.Log (this.name + " produce " + production);
-                        return production;
-                    }
-                    else
-                    {
-                        return null;
+                        if (item.quantity > 5)
+                        {
+                            Industry ind = Industry.generateIndustryOpportunity(item.getName());
+                            if (ind != null)
+                            {
+                                ind.addPop(p);
+                                industries.Add(ind);
+                            }
+                        }
                     }
                 }
             }
-            else
-            {
-                // Debug.Log (this.name + " produce " + production);
-                work -= workNeeded;
-                return production;
-            }
-
+            money += p.payTaxes();
         }
-        return null;
-    }
-
-}
-
-public class Field : Industry
-{
-    public Field(string n)
-    {
-        work = 0;
-        workers = new List<Pop>();
-        name = n;
-        production = new Dictionary<string, int>();
-        production.Add("Wheat", 1);
-        availableJobs = 5;
-        neededJob = 1;
-        workNeeded = 20;
-    }
-}
-
-public class Pasture : Industry
-{
-    public Pasture(string n)
-    {
-        work = 0;
-        workers = new List<Pop>();
-        name = n;
-        production = new Dictionary<string, int>();
-        production.Add("Cow", 1);
-        components = new Dictionary<string, int>();
-        stockItem = new Dictionary<string, int>();
-        production.Add("Wheat", 1);
-        availableJobs = 4;
-        neededJob = 1;
-        workNeeded = 30;
-    }
-
-}
-
-class IndustrySortPerJob : IComparer<Industry>
-{
-    public int Compare(Industry x, Industry y)
-    {
-        return y.availableJobs.CompareTo(x.availableJobs);
+        if (militaryBuildings.Any() && nbMilitia < tier * 20)
+        {
+            // Debug.Log(name + " NEED MORE MILITIA" + nbMilitia);
+            foreach (MilitaryComplex ind in militaryBuildings)
+            {
+                nbMilitia += ind.process();
+                // print("GOT" + nbMilitia);
+            }
+        }
 
     }
 }
+
+
 // public static class WorldGenerator
 // {
 //     public void generateCities(List<City> cities)

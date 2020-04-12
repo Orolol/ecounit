@@ -48,7 +48,15 @@
      <Compile Include="Assets\BehaviorEngine.cs" />
      <Compile Include="Assets\CityBehavior.cs" />
      <Compile Include="Assets\CityMouse.cs" />
+     <Compile Include="Assets\Industry.cs" />
+     <Compile Include="Assets\Item.cs" />
+     <Compile Include="Assets\MerchantBehaviour.cs" />
+     <Compile Include="Assets\MilitaryComplex.cs" />
      <Compile Include="Assets\MouseBehavior.cs" />
+     <Compile Include="Assets\PlayerUnitBehaviour.cs" />
+     <Compile Include="Assets\PlayerUnitUI.cs" />
+     <Compile Include="Assets\Pop.cs" />
+     <Compile Include="Assets\Workshop.cs" />
      <Compile Include="Assets\WorldGenerator.cs" />
      <None Include="Assets\TextMesh Pro\Resources\Shaders\TMPro.cginc" />
      <None Include="Assets\TextMesh Pro\Resources\Shaders\TMP_SDF-Mobile Overlay.shader" />
